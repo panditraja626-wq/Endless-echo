@@ -1,0 +1,731 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Endless Echo - 2D Puzzle Game</title>
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+      -webkit-user-select: none;
+      -webkit-touch-callout: none;
+    }
+    body {
+      background: #060913;
+      color: #e2e8f0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: space-between;
+      height: 100vh;
+      width: 100vw;
+      padding: 12px;
+    }
+    /* Header HUD */
+    .hud {
+      width: 100%;
+      max-width: 480px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 14px;
+      background: rgba(15, 23, 42, 0.75);
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(56, 189, 248, 0.2);
+      border-radius: 12px;
+    }
+    .hud-title {
+      font-size: 14px;
+      font-weight: 700;
+      letter-spacing: 1px;
+      color: #38bdf8;
+      text-transform: uppercase;
+    }
+    .hud-chamber {
+      font-size: 11px;
+      color: #94a3b8;
+    }
+    .lives-box {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 18px;
+    }
+    .heart {
+      color: #f43f5e;
+      transition: transform 0.2s;
+    }
+    .heart.lost {
+      color: #475569;
+      transform: scale(0.8);
+    }
+    .btn-buy-lives {
+      background: linear-gradient(135deg, #0284c7, #6366f1);
+      color: #fff;
+      border: none;
+      padding: 6px 12px;
+      border-radius: 8px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      box-shadow: 0 0 10px rgba(56, 189, 248, 0.4);
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .btn-buy-lives:active {
+      transform: scale(0.96);
+    }
+
+    /* Game Chamber Viewport */
+    .game-container {
+      position: relative;
+      width: 100%;
+      max-width: 480px;
+      aspect-ratio: 1 / 1;
+      max-height: 52vh;
+      background: #090e1a;
+      border-radius: 16px;
+      border: 1px solid rgba(56, 189, 248, 0.25);
+      box-shadow: 0 0 25px rgba(2, 132, 199, 0.15);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      touch-action: none;
+    }
+    #gameGrid {
+      display: grid;
+      gap: 4px;
+      padding: 8px;
+      width: 94%;
+      height: 94%;
+    }
+    .cell {
+      border-radius: 6px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      transition: background-color 0.15s, border-color 0.15s;
+    }
+    .cell.floor {
+      background: #111827;
+      border: 1px solid rgba(255, 255, 255, 0.04);
+    }
+    .cell.wall {
+      background: #0b1120;
+      border: 1px solid rgba(30, 41, 59, 0.8);
+      box-shadow: inset 0 0 8px rgba(0, 0, 0, 0.8);
+    }
+    .cell.switch {
+      background: #1e1b4b;
+      border: 2px dashed #818cf8;
+    }
+    .cell.switch.pressed {
+      background: #312e81;
+      border: 2px solid #a5b4fc;
+    }
+    .cell.gate-closed {
+      background: #4c0519;
+      border: 2px solid #f43f5e;
+    }
+    .cell.gate-open {
+      background: #064e3b;
+      border: 1px solid #10b981;
+    }
+    .cell.portal {
+      background: #2e1065;
+      border: 1px solid #c084fc;
+      animation: pulsePortal 1.5s infinite alternate;
+    }
+    .cell.crumble {
+      background: #27272a;
+      border: 1px dashed #71717a;
+    }
+    .cell.crumble.broken {
+      background: #000;
+      border: none;
+      opacity: 0.3;
+    }
+
+    @keyframes pulsePortal {
+      from { box-shadow: 0 0 4px #a855f7; }
+      to { box-shadow: 0 0 14px #c084fc; }
+    }
+
+    /* Player & Entities */
+    .entity-player {
+      width: 75%;
+      height: 75%;
+      border-radius: 50%;
+      background: radial-gradient(circle, #38bdf8 20%, #0284c7 80%);
+      box-shadow: 0 0 14px #38bdf8;
+      position: relative;
+      z-index: 5;
+      animation: playerBreathe 1.8s infinite ease-in-out;
+    }
+    .entity-player.pro {
+      background: radial-gradient(circle, #facc15 20%, #d97706 80%);
+      box-shadow: 0 0 16px #facc15;
+    }
+    @keyframes playerBreathe {
+      0%, 100% { transform: scale(0.9); }
+      50% { transform: scale(1.05); }
+    }
+
+    .entity-shadow {
+      width: 68%;
+      height: 68%;
+      border-radius: 50%;
+      background: radial-gradient(circle, #f43f5e 30%, #881337 90%);
+      box-shadow: 0 0 12px #f43f5e;
+      opacity: 0.85;
+      z-index: 4;
+      animation: shadowPulse 0.9s infinite alternate;
+    }
+    @keyframes shadowPulse {
+      from { transform: scale(0.85); opacity: 0.7; }
+      to { transform: scale(1.05); opacity: 0.95; }
+    }
+
+    .entity-shard {
+      width: 50%;
+      height: 50%;
+      background: #34d399;
+      transform: rotate(45deg);
+      box-shadow: 0 0 10px #34d399;
+      border-radius: 2px;
+      animation: rotateShard 3s infinite linear;
+    }
+    @keyframes rotateShard {
+      0% { transform: rotate(45deg) scale(0.9); }
+      50% { transform: rotate(225deg) scale(1.1); }
+      100% { transform: rotate(405deg) scale(0.9); }
+    }
+
+    .entity-exit {
+      width: 70%;
+      height: 70%;
+      border-radius: 50%;
+      border: 2px dashed #38bdf8;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .entity-exit.active {
+      border: 2px solid #34d399;
+      background: rgba(52, 211, 153, 0.2);
+      box-shadow: 0 0 16px #34d399;
+      animation: exitSpin 4s infinite linear;
+    }
+    @keyframes exitSpin {
+      100% { transform: rotate(360deg); }
+    }
+
+    /* Sub HUD */
+    .sub-hud {
+      width: 100%;
+      max-width: 480px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 13px;
+      color: #94a3b8;
+      padding: 0 4px;
+    }
+    .shard-counter {
+      color: #34d399;
+      font-weight: 600;
+    }
+
+    /* Touch Controls */
+    .controls {
+      display: grid;
+      grid-template-columns: repeat(3, 56px);
+      grid-template-rows: repeat(2, 52px);
+      gap: 6px;
+      justify-content: center;
+      align-items: center;
+      margin-bottom: 6px;
+    }
+    .btn-ctrl {
+      background: #1e293b;
+      border: 1px solid #334155;
+      color: #cbd5e1;
+      border-radius: 12px;
+      font-size: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      user-select: none;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
+    }
+    .btn-ctrl:active {
+      background: #0284c7;
+      color: #fff;
+      transform: scale(0.92);
+    }
+
+    /* Modals */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.85);
+      backdrop-filter: blur(6px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      padding: 16px;
+    }
+    .modal-card {
+      background: #0f172a;
+      border: 1px solid #38bdf8;
+      border-radius: 16px;
+      max-width: 400px;
+      width: 100%;
+      padding: 22px;
+      text-align: center;
+      box-shadow: 0 0 30px rgba(56, 189, 248, 0.3);
+    }
+    .modal-card h2 {
+      font-size: 22px;
+      margin-bottom: 8px;
+      color: #f8fafc;
+    }
+    .modal-card p {
+      font-size: 14px;
+      color: #94a3b8;
+      margin-bottom: 18px;
+      line-height: 1.5;
+    }
+    .store-item {
+      background: #1e293b;
+      border: 1px solid #334155;
+      border-radius: 10px;
+      padding: 12px;
+      margin-bottom: 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      text-align: left;
+    }
+    .store-item.featured {
+      border-color: #facc15;
+      background: linear-gradient(135deg, rgba(250, 204, 21, 0.1), #1e293b);
+    }
+    .store-btn {
+      background: #0284c7;
+      color: #fff;
+      border: none;
+      padding: 6px 14px;
+      border-radius: 6px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .store-btn.gold {
+      background: #eab308;
+      color: #000;
+    }
+    .modal-close-btn {
+      background: transparent;
+      border: 1px solid #475569;
+      color: #cbd5e1;
+      padding: 8px 16px;
+      border-radius: 8px;
+      margin-top: 10px;
+      cursor: pointer;
+      width: 100%;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Status HUD -->
+  <div class="hud">
+    <div>
+      <div class="hud-title">ENDLESS ECHO</div>
+      <div id="chamberName" class="hud-chamber">Chamber 1</div>
+    </div>
+    <div style="display: flex; align-items: center; gap: 10px;">
+      <div id="livesDisplay" class="lives-box">
+        <span class="heart">♥</span>
+        <span class="heart">♥</span>
+        <span class="heart">♥</span>
+      </div>
+      <button id="openStoreBtn" class="btn-buy-lives">
+        <span>+</span> Lives
+      </button>
+    </div>
+  </div>
+
+  <!-- Sub HUD (Shards & Echo Delay) -->
+  <div class="sub-hud">
+    <div>Resonance: <span id="shardText" class="shard-counter">0/3</span></div>
+    <div id="echoStatus">Echo Safe</div>
+  </div>
+
+  <!-- Game Grid Container -->
+  <div class="game-container" id="touchSurface">
+    <div id="gameGrid"></div>
+  </div>
+
+  <!-- On-Screen Virtual D-Pad -->
+  <div class="controls">
+    <div></div>
+    <button class="btn-ctrl" onclick="movePlayer(0, -1)">▲</button>
+    <div></div>
+    <button class="btn-ctrl" onclick="movePlayer(-1, 0)">◀</button>
+    <button class="btn-ctrl" onclick="movePlayer(0, 1)">▼</button>
+    <button class="btn-ctrl" onclick="movePlayer(1, 0)">▶</button>
+  </div>
+
+  <!-- STORE / IAP DEMO MODAL -->
+  <div id="storeModal" class="modal-backdrop">
+    <div class="modal-card">
+      <h2>Echo Store (Demo IAP)</h2>
+      <p>जिंदगी रीफिल करें या असीमित (Infinite) प्रो मोड अनलॉक करें!</p>
+
+      <div class="store-item">
+        <div>
+          <div style="font-weight: 600; color: #f43f5e;">+3 Extra Lives</div>
+          <div style="font-size: 12px; color: #94a3b8;">तुरंत 3 जिंदगी प्राप्त करें</div>
+        </div>
+        <button class="store-btn" onclick="buyItem('lives_3')">₹49 (Demo)</button>
+      </div>
+
+      <div class="store-item featured">
+        <div>
+          <div style="font-weight: 700; color: #facc15;">★ Unlock Pro Mode</div>
+          <div style="font-size: 12px; color: #cbd5e1;">असीमित जिंदगी (∞ Lives) + Gold Skin</div>
+        </div>
+        <button class="store-btn gold" onclick="buyItem('pro_mode')">₹199 (Demo)</button>
+      </div>
+
+      <div class="store-item">
+        <div>
+          <div style="font-weight: 600; color: #34d399;">Free Daily Refill</div>
+          <div style="font-size: 12px; color: #94a3b8;">+1 Free Life</div>
+        </div>
+        <button class="store-btn" style="background: #10b981;" onclick="buyItem('free_life')">FREE</button>
+      </div>
+
+      <button class="modal-close-btn" onclick="closeStore()">Close (बंद करें)</button>
+    </div>
+  </div>
+
+  <!-- GAME OVER MODAL -->
+  <div id="gameOverModal" class="modal-backdrop">
+    <div class="modal-card" style="border-color: #f43f5e; box-shadow: 0 0 30px rgba(244, 63, 94, 0.4);">
+      <h2 style="color: #f43f5e;">Resonance Lost!</h2>
+      <p>आपकी सारी जिंदगियां (Lives) समाप्त हो गई हैं। जारी रखने के लिए और जिंदगियां लें या शुरू से खेलें।</p>
+      <button class="btn-buy-lives" style="width: 100%; padding: 12px; font-size: 15px; margin-bottom: 8px; justify-content: center;" onclick="openStore()">
+        Buy More Lives / Unlock Pro Mode
+      </button>
+      <button class="modal-close-btn" onclick="restartFromBeginning()">Restart from Chamber 1</button>
+    </div>
+  </div>
+
+  <!-- AUDIO & GAME LOGIC ENGINE -->
+  <script>
+    // --- Web Audio Synth ---
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    let audioCtx = null;
+    function initAudio() {
+      if (!audioCtx) audioCtx = new AudioCtx();
+      if (audioCtx.state === 'suspended') audioCtx.resume();
+    }
+    function playTone(freq, type = 'sine', duration = 0.15, gainVal = 0.1) {
+      try {
+        initAudio();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.type = type;
+        osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+        gain.gain.setValueAtTime(gainVal, audioCtx.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + duration);
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + duration + 0.01);
+      } catch(e) {}
+    }
+
+    // --- State Management ---
+    let level = 1;
+    let lives = 3;
+    let maxLives = 3;
+    let isProMode = false;
+    let playerPos = { x: 1, y: 1 };
+    let exitPos = { x: 3, y: 3 };
+    let shards = [];
+    let echoHistory = [];
+    let echoDelay = 4;
+    let hasEcho = false;
+    let grid = [];
+    let gridSize = 5;
+
+    // --- Infinite Procedural Generator ---
+    function generateChamber(lvl) {
+      gridSize = lvl < 4 ? 5 : (lvl < 8 ? 6 : (lvl < 15 ? 7 : 8));
+      echoDelay = lvl >= 16 ? 2 : (lvl >= 6 ? 3 : 4);
+      hasEcho = lvl >= 3;
+
+      document.getElementById('chamberName').innerText = 'Chamber ' + lvl;
+      document.getElementById('echoStatus').innerText = hasEcho ? ('Shadow Delay: ' + echoDelay + ' steps') : 'No Shadow';
+
+      // Fill wall grid
+      grid = Array.from({ length: gridSize }, () => Array(gridSize).fill('wall'));
+
+      // Generate solvable path
+      playerPos = { x: 1, y: gridSize - 2 };
+      grid[playerPos.y][playerPos.x] = 'floor';
+      let curr = { ...playerPos };
+      const path = [{ ...curr }];
+
+      const dirs = [{x:0,y:-1}, {x:0,y:1}, {x:-1,y:0}, {x:1,y:0}];
+      const stepsCount = Math.floor(gridSize * 2.5 + (lvl % 5));
+
+      for (let s = 0; s < stepsCount; s++) {
+        const valid = dirs.filter(d => {
+          const nx = curr.x + d.x, ny = curr.y + d.y;
+          return nx >= 1 && nx < gridSize - 1 && ny >= 1 && ny < gridSize - 1;
+        });
+        if (valid.length === 0) break;
+        const m = valid[Math.floor(Math.random() * valid.length)];
+        curr = { x: curr.x + m.x, y: curr.y + m.y };
+        grid[curr.y][curr.x] = 'floor';
+        if (!path.some(p => p.x === curr.x && p.y === curr.y)) path.push({ ...curr });
+      }
+
+      // Exit position
+      exitPos = path[path.length - 1];
+
+      // Resonance Shards
+      const shardTiles = path.filter(p => !(p.x === playerPos.x && p.y === playerPos.y) && !(p.x === exitPos.x && p.y === exitPos.y));
+      const count = Math.min(4, Math.max(2, 2 + Math.floor(lvl / 5)));
+      shards = [];
+      shardTiles.sort(() => Math.random() - 0.5);
+      for (let i = 0; i < Math.min(count, shardTiles.length); i++) {
+        shards.push({ x: shardTiles[i].x, y: shardTiles[i].y, collected: false });
+      }
+
+      echoHistory = [{ ...playerPos }];
+      renderGrid();
+      updateHUD();
+    }
+
+    // --- Render View ---
+    function renderGrid() {
+      const container = document.getElementById('gameGrid');
+      container.innerHTML = '';
+      container.style.gridTemplateColumns = `repeat(${gridSize}, 1fr)`;
+      container.style.gridTemplateRows = `repeat(${gridSize}, 1fr)`;
+
+      const allShardsDone = shards.every(s => s.collected);
+      const shadowPos = (hasEcho && echoHistory.length > echoDelay) ? echoHistory[echoHistory.length - 1 - echoDelay] : null;
+
+      for (let y = 0; y < gridSize; y++) {
+        for (let x = 0; x < gridSize; x++) {
+          const cell = document.createElement('div');
+          cell.className = 'cell ' + grid[y][x];
+
+          // Check Exit
+          if (x === exitPos.x && y === exitPos.y) {
+            const exit = document.createElement('div');
+            exit.className = 'entity-exit' + (allShardsDone ? ' active' : '');
+            exit.innerHTML = allShardsDone ? '◎' : '⊘';
+            cell.appendChild(exit);
+          }
+
+          // Check Shard
+          const shard = shards.find(s => s.x === x && s.y === y && !s.collected);
+          if (shard) {
+            const shardEl = document.createElement('div');
+            shardEl.className = 'entity-shard';
+            cell.appendChild(shardEl);
+          }
+
+          // Check Shadow Echo
+          if (shadowPos && shadowPos.x === x && shadowPos.y === y) {
+            const shadowEl = document.createElement('div');
+            shadowEl.className = 'entity-shadow';
+            cell.appendChild(shadowEl);
+          }
+
+          // Check Player
+          if (x === playerPos.x && y === playerPos.y) {
+            const pEl = document.createElement('div');
+            pEl.className = 'entity-player' + (isProMode ? ' pro' : '');
+            cell.appendChild(pEl);
+          }
+
+          cell.onclick = () => {
+            const dx = x - playerPos.x;
+            const dy = y - playerPos.y;
+            if (Math.abs(dx) + Math.abs(dy) === 1) movePlayer(dx, dy);
+          };
+
+          container.appendChild(cell);
+        }
+      }
+    }
+
+    // --- Player Movement & Rules ---
+    function movePlayer(dx, dy) {
+      if (lives <= 0 && !isProMode) return;
+      initAudio();
+
+      const nx = playerPos.x + dx;
+      const ny = playerPos.y + dy;
+
+      if (nx < 0 || nx >= gridSize || ny < 0 || ny >= gridSize) return;
+      if (grid[ny][nx] === 'wall') return;
+
+      playerPos = { x: nx, y: ny };
+      echoHistory.push({ ...playerPos });
+      playTone(260 + (echoHistory.length % 7) * 45, 'sine', 0.08, 0.08);
+
+      // Check Shard collection
+      shards.forEach(s => {
+        if (!s.collected && s.x === nx && s.y === ny) {
+          s.collected = true;
+          playTone(600 + shards.filter(x => x.collected).length * 120, 'triangle', 0.25, 0.15);
+        }
+      });
+
+      // Check Shadow Collision
+      if (hasEcho && echoHistory.length > echoDelay) {
+        const shadow = echoHistory[echoHistory.length - 1 - echoDelay];
+        if (shadow && shadow.x === nx && shadow.y === ny) {
+          handleHit();
+          return;
+        }
+      }
+
+      // Check Victory
+      const allShardsDone = shards.every(s => s.collected);
+      if (nx === exitPos.x && ny === exitPos.y && allShardsDone) {
+        playTone(523.25, 'triangle', 0.1, 0.15);
+        setTimeout(() => playTone(659.25, 'triangle', 0.1, 0.15), 100);
+        setTimeout(() => playTone(783.99, 'triangle', 0.25, 0.2), 200);
+        level++;
+        generateChamber(level);
+        return;
+      }
+
+      renderGrid();
+      updateHUD();
+    }
+
+    function handleHit() {
+      playTone(110, 'sawtooth', 0.35, 0.25);
+      if (!isProMode) {
+        lives--;
+      }
+      updateHUD();
+
+      if (lives <= 0 && !isProMode) {
+        document.getElementById('gameOverModal').style.display = 'flex';
+      } else {
+        // Reset to chamber start
+        playerPos = { ...echoHistory[0] };
+        echoHistory = [{ ...playerPos }];
+        renderGrid();
+      }
+    }
+
+    function updateHUD() {
+      const collectedCount = shards.filter(s => s.collected).length;
+      document.getElementById('shardText').innerText = collectedCount + '/' + shards.length;
+
+      const livesDiv = document.getElementById('livesDisplay');
+      if (isProMode) {
+        livesDiv.innerHTML = '<span style="color:#facc15; font-weight:bold; font-size:15px;">PRO ∞</span>';
+      } else {
+        let hearts = '';
+        for (let i = 0; i < maxLives; i++) {
+          hearts += '<span class="heart ' + (i >= lives ? 'lost' : '') + '">♥</span>';
+        }
+        livesDiv.innerHTML = hearts;
+      }
+    }
+
+    // --- Store & Demo IAP ---
+    function openStore() {
+      document.getElementById('storeModal').style.display = 'flex';
+    }
+    function closeStore() {
+      document.getElementById('storeModal').style.display = 'none';
+    }
+    document.getElementById('openStoreBtn').onclick = openStore;
+
+    function buyItem(type) {
+      initAudio();
+      playTone(523.25, 'triangle', 0.1, 0.15);
+      setTimeout(() => playTone(880, 'triangle', 0.3, 0.2), 100);
+
+      if (type === 'lives_3') {
+        lives = Math.min(lives + 3, maxLives);
+        alert('सफल! +3 जिंदगियां (Lives) जोड़ दी गई हैं।');
+      } else if (type === 'pro_mode') {
+        isProMode = true;
+        alert('बधाई हो! PRO MODE सक्रिय हो गया है (असीमित जिंदगी)!');
+      } else if (type === 'free_life') {
+        lives = Math.min(lives + 1, maxLives);
+        alert('+1 जिंदगी प्राप्त हुई!');
+      }
+
+      document.getElementById('gameOverModal').style.display = 'none';
+      closeStore();
+      updateHUD();
+      renderGrid();
+    }
+
+    function restartFromBeginning() {
+      lives = maxLives;
+      level = 1;
+      document.getElementById('gameOverModal').style.display = 'none';
+      generateChamber(level);
+    }
+
+    // Keyboard controls
+    window.addEventListener('keydown', (e) => {
+      if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') movePlayer(0, -1);
+      if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') movePlayer(0, 1);
+      if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') movePlayer(-1, 0);
+      if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') movePlayer(1, 0);
+    });
+
+    // Touch Swipe Detection
+    let touchStartX = 0;
+    let touchStartY = 0;
+    const surface = document.getElementById('touchSurface');
+    surface.addEventListener('touchstart', (e) => {
+      touchStartX = e.touches[0].clientX;
+      touchStartY = e.touches[0].clientY;
+    }, { passive: true });
+    surface.addEventListener('touchend', (e) => {
+      const dx = e.changedTouches[0].clientX - touchStartX;
+      const dy = e.changedTouches[0].clientY - touchStartY;
+      if (Math.abs(dx) > 30 || Math.abs(dy) > 30) {
+        if (Math.abs(dx) > Math.abs(dy)) {
+          movePlayer(dx > 0 ? 1 : -1, 0);
+        } else {
+          movePlayer(0, dy > 0 ? 1 : -1);
+        }
+      }
+    }, { passive: true });
+
+    // Start Game
+    generateChamber(1);
+  </script>
+</body>
+</html>
